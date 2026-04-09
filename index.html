@@ -1,79 +1,93 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Lokasi Presisi Indonesia</title>
+    <title>Geocoding Presisi Rembang</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { font-family: 'Segoe UI', Tahoma, sans-serif; padding: 20px; background: #f4f4f4; }
-        .hasil-box { background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 400px; margin: auto; }
-        h2 { margin-top: 0; color: #333; font-size: 1.4rem; border-bottom: 2px solid #007bff; padding-bottom: 10px; }
-        .data { margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 8px; }
-        .label { font-weight: bold; font-size: 0.75rem; color: #007bff; text-transform: uppercase; letter-spacing: 1px; }
-        .value { font-size: 1.1rem; color: #222; margin-top: 4px; }
+        body { font-family: 'Segoe UI', sans-serif; padding: 20px; background: #f0f2f5; }
+        .card { background: white; padding: 25px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); max-width: 400px; margin: auto; }
+        h2 { margin-top: 0; color: #1a73e8; border-bottom: 2px solid #e8f0fe; padding-bottom: 10px; font-size: 1.2rem; }
+        .data-group { margin-bottom: 15px; }
+        .label { font-size: 0.7rem; color: #70757a; text-transform: uppercase; font-weight: bold; letter-spacing: 0.5px; }
+        .value { font-size: 1rem; color: #202124; margin-top: 4px; border-bottom: 1px solid #f1f3f4; padding-bottom: 5px; }
     </style>
 </head>
 <body>
 
-<div class="hasil-box">
+<div class="card">
     <h2>Informasi Wilayah</h2>
-    <div id="konten">Sedang mencocokkan data...</div>
+    <div id="display">
+        <p>Sedang sinkronisasi data...</p>
+    </div>
 </div>
 
 <script>
-    async function ambilAlamat() {
-        // Koordinat area Sale, Rembang
+    async function ambilData() {
+        // GANTI DENGAN API KEY ANDA
+        const API_KEY = "bdc_75dff80aec6d4698ac9b50c61f81c882"; 
+        
+        // Koordinat dari gambar Anda (Sale, Rembang)
         const lat = -6.8450;
         const lon = 111.6044;
-        const url = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=id`;
+        
+        const url = `https://api.bigdatacloud.net/data/reverse-geocode?latitude=${lat}&longitude=${lon}&localityLanguage=id&key=${API_KEY}`;
 
         try {
-            const r = await fetch(url);
-            const d = await r.json();
+            const response = await fetch(url);
+            const data = await response.json();
             
-            let info = {
-                provinsi: "-",
-                kabupaten: "-",
-                kecamatan: "-",
+            let res = {
+                dusun: data.locality || "-",
                 desa: "-",
-                dusun: d.locality || "-"
+                kecamatan: "-",
+                kabupaten: "-",
+                provinsi: "-"
             };
 
-            // Logika baru untuk menyaring level administrasi Indonesia
-            d.localityInfo.administrative.forEach(item => {
-                // Di API ini untuk Indonesia:
-                // Level 2 = Negara (Indonesia) - Kita abaikan
-                // Level 3/4 = Provinsi
-                // Level 5 = Kabupaten/Kota
-                // Level 6/7 = Kecamatan
-                // Level 8/10 = Desa/Kelurahan
-                
-                const name = item.name;
-                
-                if (item.adminLevel === 3 || (item.adminLevel === 4 && name.includes("Jawa"))) {
-                    info.provinsi = name;
-                } else if (name.includes("Kabupaten") || name.includes("Kota") || item.adminLevel === 5) {
-                    info.kabupaten = name;
-                } else if (name.includes("Kecamatan") || item.adminLevel === 6 || item.adminLevel === 7) {
-                    info.kecamatan = name;
-                } else if (item.adminLevel >= 8) {
-                    info.desa = name;
-                }
-            });
+            // Logika Scan Pintar: Mencari berdasarkan nama dan level
+            if (data.administrative && data.administrative.length > 0) {
+                data.administrative.forEach(item => {
+                    const nama = item.name;
+                    const level = item.adminLevel;
 
-            const template = `
-                <div class="data"><div class="label">Dusun / Area</div><div class="value">${info.dusun}</div></div>
-                <div class="data"><div class="label">Desa / Kelurahan</div><div class="value">${info.desa}</div></div>
-                <div class="data"><div class="label">Kecamatan</div><div class="value">${info.kecamatan}</div></div>
-                <div class="data"><div class="label">Kabupaten</div><div class="value">${info.kabupaten}</div></div>
-                <div class="data"><div class="label">Provinsi</div><div class="value">${info.provinsi}</div></div>
+                    // Deteksi Provinsi
+                    if (level === 2 || level === 3 || nama.includes("Jawa Tengah")) {
+                        if (nama !== "Indonesia") res.provinsi = nama;
+                    }
+                    // Deteksi Kabupaten
+                    if (nama.includes("Kabupaten") || nama.includes("Kota") || level === 4) {
+                        res.kabupaten = nama;
+                    }
+                    // Deteksi Kecamatan (Kunci perbaikan Anda di sini)
+                    if (nama.includes("Kecamatan") || level === 6 || level === 7) {
+                        res.kecamatan = nama;
+                    }
+                    // Deteksi Desa
+                    if (level >= 8) {
+                        res.desa = nama;
+                    }
+                });
+            }
+
+            // Jika Dusun sama dengan Kecamatan (seperti kasus "Sale"), kita rapikan
+            if (res.dusun === res.kecamatan.replace("Kecamatan ", "")) {
+                res.dusun = "Area " + res.dusun;
+            }
+
+            document.getElementById('display').innerHTML = `
+                <div class="data-group"><div class="label">Dusun / Area</div><div class="value">${res.dusun}</div></div>
+                <div class="data-group"><div class="label">Desa / Kelurahan</div><div class="value">${res.desa}</div></div>
+                <div class="data-group"><div class="label">Kecamatan</div><div class="value">${res.kecamatan}</div></div>
+                <div class="data-group"><div class="label">Kabupaten</div><div class="value">${res.kabupaten}</div></div>
+                <div class="data-group"><div class="label">Provinsi</div><div class="value">${res.provinsi}</div></div>
             `;
 
-            document.getElementById('konten').innerHTML = template;
-        } catch (e) {
-            document.getElementById('konten').innerHTML = "Gagal memuat data: " + e.message;
+        } catch (error) {
+            document.getElementById('display').innerHTML = "<p>Gagal mengambil data. Periksa koneksi atau API Key.</p>";
         }
     }
-    ambilAlamat();
+
+    ambilData();
 </script>
 
 </body>
