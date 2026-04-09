@@ -3,34 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistem Geocoding Sinkron</title>
+    <title>GPS Sinkron Otomatis</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root { --primary: #1a73e8; --bg: #f8f9fa; }
         body { font-family: 'Inter', sans-serif; background: var(--bg); margin: 0; padding: 20px; display: flex; justify-content: center; }
-        .card { width: 100%; max-width: 450px; background: white; border-radius: 20px; padding: 25px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
+        .card { width: 100%; max-width: 450px; background: white; border-radius: 24px; padding: 25px; box-shadow: 0 10px 40px rgba(0,0,0,0.08); border: 1px solid #eee; }
         .header { text-align: center; margin-bottom: 20px; }
-        .status { font-size: 0.75rem; font-weight: 600; color: #34a853; background: #e6f4ea; padding: 6px 12px; border-radius: 100px; display: inline-block; margin-bottom: 10px; }
-        h2 { color: var(--primary); margin: 0; font-size: 1.4rem; }
+        .status { font-size: 0.75rem; font-weight: 600; color: #34a853; background: #e6f4ea; padding: 6px 14px; border-radius: 100px; display: inline-block; margin-bottom: 10px; }
+        h2 { color: var(--primary); margin: 0; font-size: 1.4rem; letter-spacing: -0.5px; }
         .info-list { margin-top: 20px; }
-        .row { padding: 12px 0; border-bottom: 1px solid #f1f3f4; }
+        .row { padding: 14px 0; border-bottom: 1px solid #f1f3f4; }
         .row:last-child { border-bottom: none; }
-        .label { font-size: 0.7rem; color: #70757a; text-transform: uppercase; font-weight: 600; }
-        .value { font-size: 1rem; color: #202124; margin-top: 4px; }
-        #map { height: 180px; width: 100%; border-radius: 12px; margin-top: 20px; border: 1px solid #ddd; }
+        .label { font-size: 0.7rem; color: #70757a; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; }
+        .value { font-size: 1rem; color: #202124; margin-top: 4px; font-weight: 500; }
+        #map { height: 200px; width: 100%; border-radius: 16px; margin-top: 20px; border: 1px solid #f1f3f4; }
     </style>
 </head>
 <body>
 
 <div class="card">
     <div class="header">
-        <div class="status">● LOKASI SINKRON</div>
+        <div id="status-badge" class="status">MENCARI GPS...</div>
         <h2>Informasi Wilayah</h2>
     </div>
     
     <div class="info-list" id="display">
-        <p style="text-align: center; color: #888;">Sinkronisasi satelit...</p>
+        <p style="text-align: center; color: #888;">Mengambil koordinat perangkat...</p>
     </div>
 
     <div id="map"></div>
@@ -39,32 +39,31 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
     const API_KEY = "bdc_75dff80aec6d4698ac9b50c61f81c882"; 
-    
-    // Koordinat dari gambar Anda
-    const LAT = -6.8450;
-    const LON = 111.6044;
+    let map, marker;
 
-    // Inisialisasi Map Visual
-    const map = L.map('map', { zoomControl: false }).setView([LAT, LON], 15);
+    // Inisialisasi Map awal (tampilan sementara)
+    map = L.map('map', { zoomControl: false }).setView([0, 0], 2);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-    L.marker([LAT, LON]).addTo(map);
 
-    async function getFullLocation() {
-        const url = `https://api.bigdatacloud.net/data/reverse-geocode?latitude=${LAT}&longitude=${LON}&localityLanguage=id&key=${API_KEY}`;
+    function updateStatus(text, type) {
+        const badge = document.getElementById('status-badge');
+        badge.innerText = text;
+        badge.style.background = type === 'success' ? '#e6f4ea' : '#fff5f5';
+        badge.style.color = type === 'success' ? '#34a853' : '#e53e3e';
+    }
+
+    async function getGeocoding(lat, lon) {
+        const url = `https://api.bigdatacloud.net/data/reverse-geocode?latitude=${lat}&longitude=${lon}&localityLanguage=id&key=${API_KEY}`;
         
         try {
             const res = await fetch(url);
             const data = await res.json();
 
             let loc = {
-                provinsi: "Jawa Tengah", // Fallback Default
-                kabupaten: "Rembang",    // Fallback Default
-                kecamatan: "Sale",       // Fallback Default
-                desa: "Tengger",
-                dusun: data.locality || "Kalijambe"
+                provinsi: "-", kabupaten: "-", kecamatan: "-", desa: "-",
+                dusun: data.locality || "Area Terdeteksi"
             };
 
-            // SCANNING DATA ADMINISTRATIF
             const allNodes = [...(data.localityInfo.administrative || []), ...(data.localityInfo.informative || [])];
             
             allNodes.forEach(item => {
@@ -72,17 +71,13 @@
                 if (name.includes("Provinsi")) loc.provinsi = name;
                 if (name.includes("Kabupaten") || name.includes("Kota")) loc.kabupaten = name;
                 if (name.includes("Kecamatan")) loc.kecamatan = name;
-                
-                // Cari Desa (Level 8-10 biasanya Desa di Indonesia)
-                if (item.adminLevel >= 8 && !name.includes("Kecamatan")) {
-                    loc.desa = name;
-                }
+                if (item.adminLevel >= 8 && !name.includes("Kecamatan")) loc.desa = name;
             });
 
-            // PERBAIKAN KHUSUS SALE: Jika kecamatan masih deteksi sebagai desa
-            if (loc.desa === "Sale") {
-                loc.kecamatan = "Sale";
-                loc.desa = "Tengger"; // Berdasarkan gambar Anda: Kalijambe, Tengger
+            // Logika khusus perbaikan jika database tertukar
+            if (loc.desa.includes("Sale") || loc.dusun.includes("Sale")) {
+                loc.kecamatan = "Kecamatan Sale";
+                if (loc.desa === "Sale") loc.desa = "Tengger"; 
             }
 
             document.getElementById('display').innerHTML = `
@@ -92,13 +87,37 @@
                 <div class="row"><div class="label">Kabupaten</div><div class="value">${loc.kabupaten}</div></div>
                 <div class="row"><div class="label">Provinsi</div><div class="value">${loc.provinsi}</div></div>
             `;
+            updateStatus("LOKASI SINKRON", "success");
 
         } catch (e) {
-            document.getElementById('display').innerHTML = "<p>Gagal sinkronisasi API.</p>";
+            updateStatus("GAGAL API", "error");
         }
     }
 
-    window.onload = getFullLocation;
+    // FUNGSI UTAMA: AMBIL GPS PERANGKAT
+    function getLocation() {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition((position) => {
+                const lat = position.coords.latitude;
+                const lon = position.coords.longitude;
+
+                // Update Peta ke lokasi asli
+                map.setView([lat, lon], 16);
+                if (marker) map.removeLayer(marker);
+                marker = L.marker([lat, lon]).addTo(map);
+
+                // Ambil data alamat
+                getGeocoding(lat, lon);
+            }, (error) => {
+                updateStatus("GPS DITOLAK", "error");
+                document.getElementById('display').innerHTML = "<p style='text-align:center'>Izinkan akses lokasi di browser Anda.</p>";
+            });
+        } else {
+            updateStatus("TIDAK SUPPORT", "error");
+        }
+    }
+
+    window.onload = getLocation;
 </script>
 
 </body>
