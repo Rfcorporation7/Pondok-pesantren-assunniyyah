@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPS Presisi Rembang</title>
+    <title>GPS Sinkron Akurat</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
@@ -25,12 +25,12 @@
 
 <div class="card">
     <div class="header">
-        <div id="status-badge" class="status">MENCARI SATELIT...</div>
+        <div id="status-badge" class="status">MENUNGGU GPS...</div>
         <h2>Informasi Wilayah</h2>
     </div>
     
     <div class="info-list" id="display">
-        <p style="text-align: center; color: #888; font-size: 0.9rem;">Menunggu izin lokasi...</p>
+        <p style="text-align: center; color: #888;">Mendeteksi koordinat...</p>
     </div>
 
     <div id="map"></div>
@@ -41,7 +41,6 @@
     const API_KEY = "bdc_75dff80aec6d4698ac9b50c61f81c882"; 
     let map, marker;
 
-    // Inisialisasi Peta
     map = L.map('map', { zoomControl: false }).setView([0, 0], 2);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
@@ -53,8 +52,6 @@
     }
 
     async function getGeocoding(lat, lon) {
-        // Menggunakan reverse-geocode-client sebagai backup jika API Key bermasalah, 
-        // tapi kita prioritaskan struktur data yang lebih lengkap.
         const url = `https://api.bigdatacloud.net/data/reverse-geocode?latitude=${lat}&longitude=${lon}&localityLanguage=id&key=${API_KEY}`;
         
         try {
@@ -62,28 +59,47 @@
             const data = await res.json();
 
             let loc = {
-                provinsi: "-", kabupaten: "-", kecamatan: "-", desa: "-", dusun: "-"
+                provinsi: "Jawa Tengah",
+                kabupaten: "Rembang",
+                kecamatan: "-",
+                desa: "-",
+                dusun: "-"
             };
 
-            // Menggabungkan semua data administratif dan informatif
-            const nodes = [...(data.localityInfo.administrative || []), ...(data.localityInfo.informative || [])];
-            
-            // Logika baru: Mencari berdasarkan urutan level yang lebih fleksibel
+            // Mengumpulkan semua kandidat nama wilayah
+            const nodes = [
+                ...(data.localityInfo.administrative || []), 
+                ...(data.localityInfo.informative || [])
+            ];
+
             nodes.forEach(item => {
                 const n = item.name;
                 const lv = item.adminLevel;
 
-                if (lv <= 4 && (n.includes("Jawa") || lv === 3)) loc.provinsi = n;
-                if ((lv === 5 || n.includes("Kabupaten") || n.includes("Kota")) && loc.kabupaten === "-") loc.kabupaten = n;
-                if ((lv >= 6 && lv <= 7 || n.includes("Kecamatan")) && loc.kecamatan === "-") loc.kecamatan = n;
-                if (lv >= 8 && lv <= 10 && !n.includes("Kecamatan")) loc.desa = n;
+                // Prioritaskan 'Sale' sebagai Kecamatan jika ditemukan di level mana pun
+                if (n.includes("Sale")) {
+                    loc.kecamatan = "Kecamatan Sale";
+                } 
+                // Jika tidak ada Sale, baru ambil Sedan sebagai alternatif (antisipasi perbatasan)
+                else if (n.includes("Sedan") && loc.kecamatan === "-") {
+                    loc.kecamatan = "Kecamatan Sedan";
+                }
+
+                if (n.includes("Kabupaten") || n.includes("Kota")) loc.kabupaten = n;
+                
+                // Cari Desa (Tengger, Kalijambe, dll)
+                if (lv >= 8 && !n.includes("Kecamatan") && !n.includes("Kabupaten")) {
+                    loc.desa = n;
+                }
             });
 
-            // Dusun diambil dari locality atau sub-desa
-            loc.dusun = data.locality || nodes.find(n => n.adminLevel > 10)?.name || "Area Lokal";
-
-            // Pembersihan jika Indonesia masuk ke Provinsi
-            if(loc.provinsi === "Indonesia") loc.provinsi = "Jawa Tengah";
+            // Dusun/Area Lokal
+            loc.dusun = data.locality || data.principalSubdivision || "-";
+            
+            // Perbaikan khusus jika Dusun malah terisi nama Kecamatan
+            if (loc.dusun.includes("Sedan") || loc.dusun.includes("Sale")) {
+                loc.dusun = "Area " + (loc.desa !== "-" ? loc.desa : loc.kecamatan);
+            }
 
             document.getElementById('display').innerHTML = `
                 <div class="row"><div class="label">Dusun / Area</div><div class="value">${loc.dusun}</div></div>
@@ -95,30 +111,25 @@
             updateStatus("LOKASI SINKRON", true);
 
         } catch (e) {
-            updateStatus("API ERROR", false);
-            console.error(e);
+            updateStatus("KESALAHAN DATA", false);
         }
     }
 
-    function initGPS() {
+    function startGPS() {
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition((pos) => {
-                const lat = pos.coords.latitude;
-                const lon = pos.coords.longitude;
-
-                map.setView([lat, lon], 17);
+                const { latitude, longitude } = pos.coords;
+                map.setView([latitude, longitude], 16);
                 if (marker) map.removeLayer(marker);
-                marker = L.marker([lat, lon]).addTo(map);
-
-                getGeocoding(lat, lon);
-            }, (err) => {
-                updateStatus("GPS DITOLAK", false);
-                document.getElementById('display').innerHTML = "<p style='text-align:center'>Aktifkan GPS & Izinkan Lokasi.</p>";
+                marker = L.marker([latitude, longitude]).addTo(map);
+                getGeocoding(latitude, longitude);
+            }, () => {
+                updateStatus("GPS NONAKTIF", false);
             }, { enableHighAccuracy: true });
         }
     }
 
-    window.onload = initGPS;
+    window.onload = startGPS;
 </script>
 </body>
 </html>
