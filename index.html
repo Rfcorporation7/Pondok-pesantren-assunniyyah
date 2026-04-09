@@ -1,53 +1,76 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Lokasi Tanpa API Key</title>
+    <title>Lokasi Presisi Indonesia</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { font-family: sans-serif; padding: 20px; background: #eee; }
-        .hasil-box { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
-        h2 { margin-top: 0; color: #333; }
-        .data { margin-bottom: 10px; border-bottom: 1px solid #ddd; padding: 5px 0; }
-        .label { font-weight: bold; font-size: 12px; color: blue; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; padding: 20px; background: #f4f4f4; }
+        .hasil-box { background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 400px; margin: auto; }
+        h2 { margin-top: 0; color: #333; font-size: 1.4rem; border-bottom: 2px solid #007bff; padding-bottom: 10px; }
+        .data { margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 8px; }
+        .label { font-weight: bold; font-size: 0.75rem; color: #007bff; text-transform: uppercase; letter-spacing: 1px; }
+        .value { font-size: 1.1rem; color: #222; margin-top: 4px; }
     </style>
 </head>
 <body>
 
 <div class="hasil-box">
     <h2>Informasi Wilayah</h2>
-    <div id="konten">Sedang memuat...</div>
+    <div id="konten">Sedang mencocokkan data...</div>
 </div>
 
 <script>
     async function ambilAlamat() {
-        // MENGGUNAKAN ENDPOINT CLIENT (GRATIS & TANPA KEY)
-        const url = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=-6.8450&longitude=111.6044&localityLanguage=id`;
+        // Koordinat area Sale, Rembang
+        const lat = -6.8450;
+        const lon = 111.6044;
+        const url = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=id`;
 
         try {
             const r = await fetch(url);
             const d = await r.json();
             
-            let html = "";
-            
-            // Mengambil Desa, Kec, Kab, Prov dari 'localityInfo'
-            d.localityInfo.administrative.forEach(item => {
-                let namaWilayah = "";
-                if(item.adminLevel === 2) namaWilayah = "Provinsi";
-                if(item.adminLevel === 4) namaWilayah = "Kabupaten";
-                if(item.adminLevel === 6) namaWilayah = "Kecamatan";
-                if(item.adminLevel === 8) namaWilayah = "Desa/Kelurahan";
+            let info = {
+                provinsi: "-",
+                kabupaten: "-",
+                kecamatan: "-",
+                desa: "-",
+                dusun: d.locality || "-"
+            };
 
-                if(namaWilayah) {
-                    html += `<div class="data"><div class="label">${namaWilayah}</div><div>${item.name}</div></div>`;
+            // Logika baru untuk menyaring level administrasi Indonesia
+            d.localityInfo.administrative.forEach(item => {
+                // Di API ini untuk Indonesia:
+                // Level 2 = Negara (Indonesia) - Kita abaikan
+                // Level 3/4 = Provinsi
+                // Level 5 = Kabupaten/Kota
+                // Level 6/7 = Kecamatan
+                // Level 8/10 = Desa/Kelurahan
+                
+                const name = item.name;
+                
+                if (item.adminLevel === 3 || (item.adminLevel === 4 && name.includes("Jawa"))) {
+                    info.provinsi = name;
+                } else if (name.includes("Kabupaten") || name.includes("Kota") || item.adminLevel === 5) {
+                    info.kabupaten = name;
+                } else if (name.includes("Kecamatan") || item.adminLevel === 6 || item.adminLevel === 7) {
+                    info.kecamatan = name;
+                } else if (item.adminLevel >= 8) {
+                    info.desa = name;
                 }
             });
 
-            // Tambahkan Dusun
-            html = `<div class="data"><div class="label">Dusun/Area</div><div>${d.locality || d.city || "-"}</div></div>` + html;
+            const template = `
+                <div class="data"><div class="label">Dusun / Area</div><div class="value">${info.dusun}</div></div>
+                <div class="data"><div class="label">Desa / Kelurahan</div><div class="value">${info.desa}</div></div>
+                <div class="data"><div class="label">Kecamatan</div><div class="value">${info.kecamatan}</div></div>
+                <div class="data"><div class="label">Kabupaten</div><div class="value">${info.kabupaten}</div></div>
+                <div class="data"><div class="label">Provinsi</div><div class="value">${info.provinsi}</div></div>
+            `;
 
-            document.getElementById('konten').innerHTML = html;
+            document.getElementById('konten').innerHTML = template;
         } catch (e) {
-            document.getElementById('konten').innerHTML = "Gagal mengambil data: " + e.message;
+            document.getElementById('konten').innerHTML = "Gagal memuat data: " + e.message;
         }
     }
     ambilAlamat();
