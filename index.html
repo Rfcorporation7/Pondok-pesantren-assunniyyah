@@ -1,41 +1,128 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
-    <title>Geocoding Presisi Rembang</title>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Geocoding Presisi</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Segoe UI', sans-serif; padding: 20px; background: #f0f2f5; }
-        .card { background: white; padding: 25px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); max-width: 400px; margin: auto; }
-        h2 { margin-top: 0; color: #1a73e8; border-bottom: 2px solid #e8f0fe; padding-bottom: 10px; font-size: 1.2rem; }
-        .data-group { margin-bottom: 15px; }
-        .label { font-size: 0.7rem; color: #70757a; text-transform: uppercase; font-weight: bold; letter-spacing: 0.5px; }
-        .value { font-size: 1rem; color: #202124; margin-top: 4px; border-bottom: 1px solid #f1f3f4; padding-bottom: 5px; }
+        :root {
+            --primary: #007bff;
+            --bg: #f0f2f5;
+            --glass: rgba(255, 255, 255, 0.8);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: #2d3436;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 400px;
+            background: var(--glass);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 24px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        h2 {
+            margin: 0 0 25px 0;
+            font-size: 1.5rem;
+            text-align: center;
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        .data-card {
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 16px;
+            padding: 5px 15px;
+            margin-bottom: 15px;
+        }
+
+        .item {
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        .item:last-child {
+            border-bottom: none;
+        }
+
+        .label {
+            font-size: 0.7rem;
+            color: #636e72;
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.8px;
+            margin-bottom: 4px;
+        }
+
+        .value {
+            font-size: 1rem;
+            color: #2d3436;
+            font-weight: 400;
+        }
+
+        .status-badge {
+            text-align: center;
+            font-size: 0.8rem;
+            padding: 8px;
+            border-radius: 100px;
+            margin-bottom: 20px;
+            background: #e8f0fe;
+            color: var(--primary);
+        }
+
+        /* Responsive Mobile */
+        @media (max-width: 480px) {
+            .container { padding: 20px; }
+            .value { font-size: 0.95rem; }
+        }
     </style>
 </head>
 <body>
 
-<div class="card">
+<div class="container">
+    <div id="status" class="status-badge">Menghubungkan ke satelit...</div>
     <h2>Informasi Wilayah</h2>
-    <div id="display">
-        <p>Sedang sinkronisasi data...</p>
+    
+    <div class="data-card" id="output">
+        <div class="item">
+            <div class="label">Memuat data...</div>
+        </div>
     </div>
 </div>
 
 <script>
-    async function ambilData() {
-        // GANTI DENGAN API KEY ANDA
-        const API_KEY = "bdc_75dff80aec6d4698ac9b50c61f81c882"; 
-        
-        // Koordinat dari gambar Anda (Sale, Rembang)
-        const lat = -6.8450;
-        const lon = 111.6044;
-        
-        const url = `https://api.bigdatacloud.net/data/reverse-geocode?latitude=${lat}&longitude=${lon}&localityLanguage=id&key=${API_KEY}`;
+    // MASUKKAN API KEY ANDA DI SINI
+    const API_KEY = "bdc_75dff80aec6d4698ac9b50c61f81c882"; 
+
+    // Koordinat Target (Kalijambe, Sale, Rembang)
+    const LAT = -6.8450;
+    const LON = 111.6044;
+
+    async function fetchGeocoding() {
+        const url = `https://api.bigdatacloud.net/data/reverse-geocode?latitude=${LAT}&longitude=${LON}&localityLanguage=id&key=${API_KEY}`;
+        const outputDiv = document.getElementById('output');
+        const statusDiv = document.getElementById('status');
 
         try {
             const response = await fetch(url);
             const data = await response.json();
-            
+
+            if (data.error) throw new Error(data.error);
+
             let res = {
                 dusun: data.locality || "-",
                 desa: "-",
@@ -44,50 +131,77 @@
                 provinsi: "-"
             };
 
-            // Logika Scan Pintar: Mencari berdasarkan nama dan level
-            if (data.administrative && data.administrative.length > 0) {
-                data.administrative.forEach(item => {
-                    const nama = item.name;
-                    const level = item.adminLevel;
-
-                    // Deteksi Provinsi
-                    if (level === 2 || level === 3 || nama.includes("Jawa Tengah")) {
-                        if (nama !== "Indonesia") res.provinsi = nama;
-                    }
-                    // Deteksi Kabupaten
-                    if (nama.includes("Kabupaten") || nama.includes("Kota") || level === 4) {
-                        res.kabupaten = nama;
-                    }
-                    // Deteksi Kecamatan (Kunci perbaikan Anda di sini)
-                    if (nama.includes("Kecamatan") || level === 6 || level === 7) {
-                        res.kecamatan = nama;
-                    }
-                    // Deteksi Desa
-                    if (level >= 8) {
-                        res.desa = nama;
+            // 1. Ekstraksi dari Informative (Desa & Kecamatan)
+            if (data.localityInfo.informative) {
+                data.localityInfo.informative.forEach(item => {
+                    if (item.name.toLowerCase().includes("kecamatan")) {
+                        res.kecamatan = item.name;
+                    } else if (item.order >= 8 && res.desa === "-") {
+                        res.desa = item.name;
                     }
                 });
             }
 
-            // Jika Dusun sama dengan Kecamatan (seperti kasus "Sale"), kita rapikan
-            if (res.dusun === res.kecamatan.replace("Kecamatan ", "")) {
-                res.dusun = "Area " + res.dusun;
+            // 2. Ekstraksi dari Administrative (Kabupaten & Provinsi)
+            if (data.localityInfo.administrative) {
+                data.localityInfo.administrative.forEach(item => {
+                    const name = item.name;
+                    // Provinsi
+                    if (item.adminLevel === 4 || name.includes("Jawa Tengah")) {
+                        if (name !== "Indonesia") res.provinsi = name;
+                    }
+                    // Kabupaten
+                    if (item.adminLevel === 5 || name.includes("Kabupaten") || name.includes("Kota")) {
+                        res.kabupaten = name;
+                    }
+                    // Backup Kecamatan
+                    if (res.kecamatan === "-" && (item.adminLevel === 6 || name.includes("Kecamatan"))) {
+                        res.kecamatan = name;
+                    }
+                });
             }
 
-            document.getElementById('display').innerHTML = `
-                <div class="data-group"><div class="label">Dusun / Area</div><div class="value">${res.dusun}</div></div>
-                <div class="data-group"><div class="label">Desa / Kelurahan</div><div class="value">${res.desa}</div></div>
-                <div class="data-group"><div class="label">Kecamatan</div><div class="value">${res.kecamatan}</div></div>
-                <div class="data-group"><div class="label">Kabupaten</div><div class="value">${res.kabupaten}</div></div>
-                <div class="data-group"><div class="label">Provinsi</div><div class="value">${res.provinsi}</div></div>
+            // Sinkronisasi: Jika Dusun = Desa, kita buat lebih spesifik
+            if (res.dusun === res.desa) res.dusun = "Area " + res.desa;
+
+            statusDiv.innerText = "Lokasi Sinkron";
+            statusDiv.style.background = "#e6fffa";
+            statusDiv.style.color = "#38b2ac";
+
+            outputDiv.innerHTML = `
+                <div class="item">
+                    <div class="label">Dusun / Area</div>
+                    <div class="value">${res.dusun}</div>
+                </div>
+                <div class="item">
+                    <div class="label">Desa / Kelurahan</div>
+                    <div class="value">${res.desa}</div>
+                </div>
+                <div class="item">
+                    <div class="label">Kecamatan</div>
+                    <div class="value">${res.kecamatan}</div>
+                </div>
+                <div class="item">
+                    <div class="label">Kabupaten</div>
+                    <div class="value">${res.kabupaten}</div>
+                </div>
+                <div class="item">
+                    <div class="label">Provinsi</div>
+                    <div class="value">${res.provinsi}</div>
+                </div>
             `;
 
         } catch (error) {
-            document.getElementById('display').innerHTML = "<p>Gagal mengambil data. Periksa koneksi atau API Key.</p>";
+            statusDiv.innerText = "Koneksi Gagal";
+            statusDiv.style.background = "#fff5f5";
+            statusDiv.style.color = "#e53e3e";
+            outputDiv.innerHTML = `<div class="item"><div class="value">Gagal memuat data. Periksa API Key Anda.</div></div>`;
+            console.error(error);
         }
     }
 
-    ambilData();
+    // Jalankan Fungsi
+    window.onload = fetchGeocoding;
 </script>
 
 </body>
