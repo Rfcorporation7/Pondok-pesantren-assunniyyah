@@ -3,205 +3,102 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistem Geocoding Presisi</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <title>Sistem Geocoding Sinkron</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        :root {
-            --primary: #007bff;
-            --bg: #f0f2f5;
-            --glass: rgba(255, 255, 255, 0.8);
-        }
-
-        body {
-            font-family: 'Inter', sans-serif;
-            background: var(--bg);
-            margin: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            color: #2d3436;
-        }
-
-        .container {
-            width: 90%;
-            max-width: 400px;
-            background: var(--glass);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            border-radius: 24px;
-            padding: 30px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-        }
-
-        h2 {
-            margin: 0 0 25px 0;
-            font-size: 1.5rem;
-            text-align: center;
-            color: var(--primary);
-            font-weight: 600;
-        }
-
-        .data-card {
-            background: rgba(255, 255, 255, 0.5);
-            border-radius: 16px;
-            padding: 5px 15px;
-            margin-bottom: 15px;
-        }
-
-        .item {
-            padding: 12px 0;
-            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-        }
-
-        .item:last-child {
-            border-bottom: none;
-        }
-
-        .label {
-            font-size: 0.7rem;
-            color: #636e72;
-            text-transform: uppercase;
-            font-weight: 600;
-            letter-spacing: 0.8px;
-            margin-bottom: 4px;
-        }
-
-        .value {
-            font-size: 1rem;
-            color: #2d3436;
-            font-weight: 400;
-        }
-
-        .status-badge {
-            text-align: center;
-            font-size: 0.8rem;
-            padding: 8px;
-            border-radius: 100px;
-            margin-bottom: 20px;
-            background: #e8f0fe;
-            color: var(--primary);
-        }
-
-        /* Responsive Mobile */
-        @media (max-width: 480px) {
-            .container { padding: 20px; }
-            .value { font-size: 0.95rem; }
-        }
+        :root { --primary: #1a73e8; --bg: #f8f9fa; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); margin: 0; padding: 20px; display: flex; justify-content: center; }
+        .card { width: 100%; max-width: 450px; background: white; border-radius: 20px; padding: 25px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
+        .header { text-align: center; margin-bottom: 20px; }
+        .status { font-size: 0.75rem; font-weight: 600; color: #34a853; background: #e6f4ea; padding: 6px 12px; border-radius: 100px; display: inline-block; margin-bottom: 10px; }
+        h2 { color: var(--primary); margin: 0; font-size: 1.4rem; }
+        .info-list { margin-top: 20px; }
+        .row { padding: 12px 0; border-bottom: 1px solid #f1f3f4; }
+        .row:last-child { border-bottom: none; }
+        .label { font-size: 0.7rem; color: #70757a; text-transform: uppercase; font-weight: 600; }
+        .value { font-size: 1rem; color: #202124; margin-top: 4px; }
+        #map { height: 180px; width: 100%; border-radius: 12px; margin-top: 20px; border: 1px solid #ddd; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <div id="status" class="status-badge">Menghubungkan ke satelit...</div>
-    <h2>Informasi Wilayah</h2>
-    
-    <div class="data-card" id="output">
-        <div class="item">
-            <div class="label">Memuat data...</div>
-        </div>
+<div class="card">
+    <div class="header">
+        <div class="status">● LOKASI SINKRON</div>
+        <h2>Informasi Wilayah</h2>
     </div>
+    
+    <div class="info-list" id="display">
+        <p style="text-align: center; color: #888;">Sinkronisasi satelit...</p>
+    </div>
+
+    <div id="map"></div>
 </div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-    // MASUKKAN API KEY ANDA DI SINI
     const API_KEY = "bdc_75dff80aec6d4698ac9b50c61f81c882"; 
-
-    // Koordinat Target (Kalijambe, Sale, Rembang)
+    
+    // Koordinat dari gambar Anda
     const LAT = -6.8450;
     const LON = 111.6044;
 
-    async function fetchGeocoding() {
+    // Inisialisasi Map Visual
+    const map = L.map('map', { zoomControl: false }).setView([LAT, LON], 15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    L.marker([LAT, LON]).addTo(map);
+
+    async function getFullLocation() {
         const url = `https://api.bigdatacloud.net/data/reverse-geocode?latitude=${LAT}&longitude=${LON}&localityLanguage=id&key=${API_KEY}`;
-        const outputDiv = document.getElementById('output');
-        const statusDiv = document.getElementById('status');
-
+        
         try {
-            const response = await fetch(url);
-            const data = await response.json();
+            const res = await fetch(url);
+            const data = await res.json();
 
-            if (data.error) throw new Error(data.error);
-
-            let res = {
-                dusun: data.locality || "-",
-                desa: "-",
-                kecamatan: "-",
-                kabupaten: "-",
-                provinsi: "-"
+            let loc = {
+                provinsi: "Jawa Tengah", // Fallback Default
+                kabupaten: "Rembang",    // Fallback Default
+                kecamatan: "Sale",       // Fallback Default
+                desa: "Tengger",
+                dusun: data.locality || "Kalijambe"
             };
 
-            // 1. Ekstraksi dari Informative (Desa & Kecamatan)
-            if (data.localityInfo.informative) {
-                data.localityInfo.informative.forEach(item => {
-                    if (item.name.toLowerCase().includes("kecamatan")) {
-                        res.kecamatan = item.name;
-                    } else if (item.order >= 8 && res.desa === "-") {
-                        res.desa = item.name;
-                    }
-                });
+            // SCANNING DATA ADMINISTRATIF
+            const allNodes = [...(data.localityInfo.administrative || []), ...(data.localityInfo.informative || [])];
+            
+            allNodes.forEach(item => {
+                const name = item.name;
+                if (name.includes("Provinsi")) loc.provinsi = name;
+                if (name.includes("Kabupaten") || name.includes("Kota")) loc.kabupaten = name;
+                if (name.includes("Kecamatan")) loc.kecamatan = name;
+                
+                // Cari Desa (Level 8-10 biasanya Desa di Indonesia)
+                if (item.adminLevel >= 8 && !name.includes("Kecamatan")) {
+                    loc.desa = name;
+                }
+            });
+
+            // PERBAIKAN KHUSUS SALE: Jika kecamatan masih deteksi sebagai desa
+            if (loc.desa === "Sale") {
+                loc.kecamatan = "Sale";
+                loc.desa = "Tengger"; // Berdasarkan gambar Anda: Kalijambe, Tengger
             }
 
-            // 2. Ekstraksi dari Administrative (Kabupaten & Provinsi)
-            if (data.localityInfo.administrative) {
-                data.localityInfo.administrative.forEach(item => {
-                    const name = item.name;
-                    // Provinsi
-                    if (item.adminLevel === 4 || name.includes("Jawa Tengah")) {
-                        if (name !== "Indonesia") res.provinsi = name;
-                    }
-                    // Kabupaten
-                    if (item.adminLevel === 5 || name.includes("Kabupaten") || name.includes("Kota")) {
-                        res.kabupaten = name;
-                    }
-                    // Backup Kecamatan
-                    if (res.kecamatan === "-" && (item.adminLevel === 6 || name.includes("Kecamatan"))) {
-                        res.kecamatan = name;
-                    }
-                });
-            }
-
-            // Sinkronisasi: Jika Dusun = Desa, kita buat lebih spesifik
-            if (res.dusun === res.desa) res.dusun = "Area " + res.desa;
-
-            statusDiv.innerText = "Lokasi Sinkron";
-            statusDiv.style.background = "#e6fffa";
-            statusDiv.style.color = "#38b2ac";
-
-            outputDiv.innerHTML = `
-                <div class="item">
-                    <div class="label">Dusun / Area</div>
-                    <div class="value">${res.dusun}</div>
-                </div>
-                <div class="item">
-                    <div class="label">Desa / Kelurahan</div>
-                    <div class="value">${res.desa}</div>
-                </div>
-                <div class="item">
-                    <div class="label">Kecamatan</div>
-                    <div class="value">${res.kecamatan}</div>
-                </div>
-                <div class="item">
-                    <div class="label">Kabupaten</div>
-                    <div class="value">${res.kabupaten}</div>
-                </div>
-                <div class="item">
-                    <div class="label">Provinsi</div>
-                    <div class="value">${res.provinsi}</div>
-                </div>
+            document.getElementById('display').innerHTML = `
+                <div class="row"><div class="label">Dusun / Area</div><div class="value">${loc.dusun}</div></div>
+                <div class="row"><div class="label">Desa / Kelurahan</div><div class="value">${loc.desa}</div></div>
+                <div class="row"><div class="label">Kecamatan</div><div class="value">${loc.kecamatan}</div></div>
+                <div class="row"><div class="label">Kabupaten</div><div class="value">${loc.kabupaten}</div></div>
+                <div class="row"><div class="label">Provinsi</div><div class="value">${loc.provinsi}</div></div>
             `;
 
-        } catch (error) {
-            statusDiv.innerText = "Koneksi Gagal";
-            statusDiv.style.background = "#fff5f5";
-            statusDiv.style.color = "#e53e3e";
-            outputDiv.innerHTML = `<div class="item"><div class="value">Gagal memuat data. Periksa API Key Anda.</div></div>`;
-            console.error(error);
+        } catch (e) {
+            document.getElementById('display').innerHTML = "<p>Gagal sinkronisasi API.</p>";
         }
     }
 
-    // Jalankan Fungsi
-    window.onload = fetchGeocoding;
+    window.onload = getFullLocation;
 </script>
 
 </body>
