@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Sistem Geocoding Presisi</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; padding: 20px; }
+        .container { max-width: 450px; margin: auto; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h2 { color: #333; font-size: 1.2rem; border-bottom: 2px solid #007bff; padding-bottom: 10px; }
+        .lokasi-item { margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+        .label { font-size: 0.75rem; color: #888; text-transform: uppercase; font-weight: bold; }
+        .value { font-size: 1rem; color: #222; margin-top: 3px; }
+        #loading { font-style: italic; color: #007bff; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Detail Administrasi Lokasi</h2>
+    <div id="loading">Menghubungkan ke satelit...</div>
+    <div id="hasil-lokasi"></div>
+</div>
+
+<script>
+    // MASUKKAN API KEY ANDA DI SINI
+    const MY_API_KEY = "bdc_064eb99b03b74a71a419ed5a4ad334ef"; 
+
+    // Koordinat GPS (Contoh: Lokasi di Rembang dari gambar Anda)
+    const lat = -6.8450;
+    const lon = 111.6044;
+
+    async function ambilDataGeocoding() {
+        const url = `https://api.bigdatacloud.net/data/reverse-geocode?latitude=${lat}&longitude=${lon}&localityLanguage=id&key=${MY_API_KEY}`;
+
+        try {
+            const response = await fetch(url);
+            const data = await response.json();
+            
+            document.getElementById('loading').style.display = 'none';
+
+            // Mengambil data dari array 'administrative'
+            // Di Indonesia: adminLevel 2=Prov, 4=Kab, 6=Kec, 8=Desa
+            let hasilHtml = "";
+            
+            // Filter dan tampilkan data
+            data.administrative.reverse().forEach(wilayah => {
+                let namaLevel = "";
+                if (wilayah.adminLevel === 2) namaLevel = "Provinsi";
+                if (wilayah.adminLevel === 4) namaLevel = "Kabupaten / Kota";
+                if (wilayah.adminLevel === 6) namaLevel = "Kecamatan";
+                if (wilayah.adminLevel === 8) namaLevel = "Kelurahan / Desa";
+
+                if (namaLevel) {
+                    hasilHtml += `
+                        <div class="lokasi-item">
+                            <div class="label">${namaLevel}</div>
+                            <div class="value">${wilayah.name}</div>
+                        </div>`;
+                }
+            });
+
+            // Menambahkan Dusun/Lingkungan (biasanya ada di bagian 'locality')
+            const dusun = data.locality || "Tidak terdeteksi";
+            hasilHtml = `
+                <div class="lokasi-item">
+                    <div class="label">Dusun / Area Spesifik</div>
+                    <div class="value">${dusun}</div>
+                </div>` + hasilHtml;
+
+            document.getElementById('hasil-lokasi').innerHTML = hasilHtml;
+
+        } catch (error) {
+            document.getElementById('loading').innerText = "Gagal memuat data. Periksa API Key Anda.";
+        }
+    }
+
+    ambilDataGeocoding();
+</script>
+
+</body>
+</html>
+
