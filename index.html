@@ -3,160 +3,213 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPS Geocoding Indonesia</title>
+    <title>Geo-Location Indonesia</title>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         :root {
             --bg: #0f172a;
-            --card: rgba(30, 41, 59, 0.7);
+            --card: #1e293b;
             --accent: #38bdf8;
-            --text: #f1f5f9;
+            --text-main: #f1f5f9;
+            --text-dim: #94a3b8;
+            --error: #fb7185;
         }
 
         body {
-            font-family: 'Segoe UI', sans-serif;
+            font-family: 'Inter', -apple-system, sans-serif;
             background-color: var(--bg);
-            color: var(--text);
+            color: var(--text-main);
+            margin: 0;
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            margin: 0;
         }
 
-        .container {
+        .app-card {
             background: var(--card);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 2rem;
-            border-radius: 20px;
             width: 90%;
             max-width: 400px;
+            padding: 2rem;
+            border-radius: 24px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.05);
             text-align: center;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
         }
 
-        h2 { font-weight: 300; margin-bottom: 1.5rem; }
+        .icon-header {
+            width: 60px;
+            height: 60px;
+            background: rgba(56, 189, 248, 0.1);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0 auto 1.5rem;
+            color: var(--accent);
+        }
 
-        .status-box {
+        h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 2rem; }
+
+        .status-display {
             background: rgba(0,0,0,0.2);
-            padding: 1rem;
-            border-radius: 12px;
-            margin-bottom: 1rem;
-            font-size: 0.9rem;
-            min-height: 50px;
+            padding: 1.2rem;
+            border-radius: 16px;
+            margin-bottom: 1.5rem;
+            font-size: 0.95rem;
+            min-height: 40px;
             display: flex;
             align-items: center;
             justify-content: center;
         }
 
-        button {
+        .btn-primary {
             background: var(--accent);
             color: var(--bg);
             border: none;
-            padding: 12px 24px;
-            border-radius: 12px;
-            font-weight: bold;
+            width: 100%;
+            padding: 14px;
+            border-radius: 14px;
+            font-weight: 700;
             cursor: pointer;
             display: flex;
             align-items: center;
-            gap: 8px;
-            margin: 0 auto;
-            transition: transform 0.2s;
+            justify-content: center;
+            gap: 10px;
+            transition: all 0.3s ease;
         }
 
-        button:active { transform: scale(0.95); }
+        .btn-primary:active { transform: scale(0.97); opacity: 0.9; }
 
-        .result-item {
+        .info-group {
             text-align: left;
-            margin-top: 1rem;
+            margin-top: 2rem;
+            padding-top: 1.5rem;
             border-top: 1px solid rgba(255,255,255,0.1);
-            padding-top: 1rem;
         }
 
-        .label { color: var(--accent); font-size: 0.8rem; display: block; }
-        .value { font-weight: 500; margin-bottom: 8px; display: block; }
+        .label {
+            color: var(--accent);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .value {
+            font-size: 1rem;
+            margin-bottom: 15px;
+            display: block;
+            word-break: break-all;
+        }
+
+        .error-text { color: var(--error); }
+
+        /* Loading Animation */
+        .pulse { animation: pulse-animation 1.5s infinite; }
+        @keyframes pulse-animation {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <i data-lucide="map-pin" style="color: var(--accent); margin-bottom: 10px;"></i>
-    <h2>Geocoding Lokasi</h2>
-    
-    <div id="status" class="status-box">Klik tombol di bawah untuk melacak lokasi Anda</div>
-    
-    <button onclick="getLocation()">
+<div class="app-card">
+    <div class="icon-header">
+        <i data-lucide="map-pin"></i>
+    </div>
+    <h1>Geocoding Lokasi</h1>
+
+    <div id="statusText" class="status-display">Siap melacak lokasi</div>
+
+    <button class="btn-primary" onclick="startTracking()">
         <i data-lucide="navigation"></i> Dapatkan Lokasi
     </button>
 
-    <div id="result" class="result-item" style="display: none;">
-        <span class="label">Koordinat:</span>
-        <span id="coords" class="value">-</span>
-        
-        <span class="label">Alamat Lengkap (GoAPI):</span>
-        <span id="address" class="value">Mencari alamat...</span>
+    <div id="resultArea" class="info-group" style="display: none;">
+        <span class="label">Koordinat GPS</span>
+        <span id="coordVal" class="value">-</span>
+
+        <span class="label">Alamat Lengkap (GoAPI)</span>
+        <span id="addressVal" class="value">Menunggu data...</span>
     </div>
 </div>
 
 <script>
-    // Inisialisasi Icon
+    // Load Icons
     lucide.createIcons();
 
-    const statusDiv = document.getElementById('status');
-    const resultDiv = document.getElementById('result');
+    const statusText = document.getElementById('statusText');
+    const resultArea = document.getElementById('resultArea');
+    const addressVal = document.getElementById('addressVal');
 
-    function getLocation() {
-        statusDiv.innerHTML = "Meminta izin GPS...";
+    function startTracking() {
+        statusText.innerHTML = "Meminta akses GPS...";
+        statusText.classList.add('pulse');
         
         if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(showPosition, showError);
+            navigator.geolocation.getCurrentPosition(onSuccess, onError, {
+                enableHighAccuracy: true,
+                timeout: 5000,
+                maximumAge: 0
+            });
         } else {
-            statusDiv.innerHTML = "Geolocation tidak didukung browser ini.";
+            statusText.innerHTML = "GPS tidak didukung browser.";
         }
     }
 
-    function showPosition(position) {
+    function onSuccess(position) {
         const lat = position.coords.latitude;
-        const lon = position.coords.longitude;
+        const lng = position.coords.longitude;
         
-        statusDiv.innerHTML = "Lokasi ditemukan!";
-        resultDiv.style.display = "block";
-        document.getElementById('coords').innerText = `${lat}, ${lon}`;
+        statusText.classList.remove('pulse');
+        statusText.innerHTML = "Lokasi ditemukan!";
+        resultArea.style.display = "block";
+        document.getElementById('coordVal').innerText = `${lat}, ${lng}`;
         
-        // Panggil Fungsi Reverse Geocoding GoAPI
-        reverseGeocode(lat, lon);
+        fetchAddress(lat, lng);
     }
 
-    async function reverseGeocode(lat, lon) {
-        // Catatan: Ganti 'YOUR_API_KEY' dengan API Key asli dari dashboard GoAPI.io Anda
-        const apiKey = '706b1a11-718b-5864-6226-dae984ab'; 
-        const url = `https://api.goapi.io/v1/reverse?lat=${lat}&lon=${lon}&api_key=${apiKey}`;
+    async function fetchAddress(lat, lng) {
+        addressVal.innerHTML = "<span class='pulse'>Mengambil alamat...</span>";
+        
+        // --- MASUKKAN API KEY ANDA DI SINI ---
+        const API_KEY = '706b1a11-718b-5864-6226-dae984ab'; 
+        
+        // Menggunakan endpoint regional/reverse sesuai dokumentasi GoAPI
+        const url = `https://api.goapi.io/v1/regional/reverse?lat=${lat}&lng=${lng}&api_key=${API_KEY}`;
 
         try {
             const response = await fetch(url);
-            const data = await response.json();
-            
-            if (data.status === "success") {
-                // GoAPI memberikan data yang sangat rapi
-                const addr = data.data;
-                document.getElementById('address').innerText = 
-                    `${addr.name}, ${addr.village}, ${addr.district}, ${addr.city}, ${addr.province}`;
+            const res = await response.json();
+
+            if (res.status === "success" && res.data.length > 0) {
+                const loc = res.data[0];
+                addressVal.innerHTML = `${loc.village}, ${loc.district}, ${loc.city}, ${loc.province}`;
             } else {
-                document.getElementById('address').innerText = "Gagal mengambil detail alamat.";
+                // Jika sukses tapi data kosong atau status bukan success
+                addressVal.innerHTML = `<span class="error-text">Gagal: ${res.message || 'Lokasi tidak terdaftar'}</span>`;
             }
-        } catch (error) {
-            document.getElementById('address').innerText = "Terjadi kesalahan koneksi.";
+        } catch (err) {
+            addressVal.innerHTML = `<span class="error-text">Kesalahan Koneksi / API Key</span>`;
+            console.error(err);
         }
     }
 
-    function showError(error) {
+    function onError(error) {
+        statusText.classList.remove('pulse');
         switch(error.code) {
             case error.PERMISSION_DENIED:
-                statusDiv.innerHTML = "Izin lokasi ditolak user.";
+                statusText.innerHTML = "Izin GPS ditolak.";
+                break;
+            case error.TIMEOUT:
+                statusText.innerHTML = "Waktu GPS habis.";
                 break;
             default:
-                statusDiv.innerHTML = "Terjadi kesalahan GPS.";
+                statusText.innerHTML = "Gagal mengambil GPS.";
         }
     }
 </script>
