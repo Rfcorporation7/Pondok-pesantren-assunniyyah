@@ -1,75 +1,57 @@
 <!DOCTYPE html>
-<html lang="id">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>Debug Geocoding</title>
+    <title>Lokasi Tanpa API Key</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { font-family: sans-serif; padding: 20px; line-height: 1.6; }
-        .status { padding: 10px; border-radius: 5px; margin-bottom: 10px; }
-        .error { background: #fee; color: #c00; border: 1px solid #c00; }
-        .success { background: #efe; color: #080; border: 1px solid #080; }
-        b { display: inline-block; width: 100px; }
+        body { font-family: sans-serif; padding: 20px; background: #eee; }
+        .hasil-box { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        h2 { margin-top: 0; color: #333; }
+        .data { margin-bottom: 10px; border-bottom: 1px solid #ddd; padding: 5px 0; }
+        .label { font-weight: bold; font-size: 12px; color: blue; }
     </style>
 </head>
 <body>
 
-    <h3>Status Koneksi:</h3>
-    <div id="status-box" class="status">Memulai pencarian...</div>
-
-    <h3>Hasil Alamat:</h3>
-    <div id="hasil"></div>
+<div class="hasil-box">
+    <h2>Informasi Wilayah</h2>
+    <div id="konten">Sedang memuat...</div>
+</div>
 
 <script>
-    // GANTI DENGAN KEY ANDA
-    const API_KEY = "bdc_75dff80aec6d4698ac9b50c61f81c882"; 
-    
-    // Koordinat Testing (Tengger, Sale, Rembang)
-    const lat = -6.8450;
-    const lon = 111.6044;
-
-    async function tesGeocoding() {
-        const statusBox = document.getElementById('status-box');
-        const hasilBox = document.getElementById('hasil');
+    async function ambilAlamat() {
+        // MENGGUNAKAN ENDPOINT CLIENT (GRATIS & TANPA KEY)
+        const url = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=-6.8450&longitude=111.6044&localityLanguage=id`;
 
         try {
-            const response = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode?latitude=${lat}&longitude=${lon}&localityLanguage=id&key=${API_KEY}`);
+            const r = await fetch(url);
+            const d = await r.json();
             
-            if (!response.ok) {
-                throw new Error(`Server Error: ${response.status} (Cek API Key Anda)`);
-            }
-
-            const data = await response.json();
+            let html = "";
             
-            statusBox.className = "status success";
-            statusBox.innerText = "Koneksi Berhasil!";
+            // Mengambil Desa, Kec, Kab, Prov dari 'localityInfo'
+            d.localityInfo.administrative.forEach(item => {
+                let namaWilayah = "";
+                if(item.adminLevel === 2) namaWilayah = "Provinsi";
+                if(item.adminLevel === 4) namaWilayah = "Kabupaten";
+                if(item.adminLevel === 6) namaWilayah = "Kecamatan";
+                if(item.adminLevel === 8) namaWilayah = "Desa/Kelurahan";
 
-            // Ambil data dari array administrative
-            let alamat = "";
-            data.administrative.forEach(item => {
-                let label = "";
-                if (item.adminLevel === 2) label = "Provinsi";
-                if (item.adminLevel === 4) label = "Kabupaten";
-                if (item.adminLevel === 6) label = "Kecamatan";
-                if (item.adminLevel === 8) label = "Desa";
-                
-                if(label) {
-                    alamat += `<p><b>${label}:</b> ${item.name}</p>`;
+                if(namaWilayah) {
+                    html += `<div class="data"><div class="label">${namaWilayah}</div><div>${item.name}</div></div>`;
                 }
             });
 
-            // Dusun/Area
-            alamat = `<p><b>Dusun:</b> ${data.locality || "-"}</p>` + alamat;
-            
-            hasilBox.innerHTML = alamat;
+            // Tambahkan Dusun
+            html = `<div class="data"><div class="label">Dusun/Area</div><div>${d.locality || d.city || "-"}</div></div>` + html;
 
-        } catch (err) {
-            statusBox.className = "status error";
-            statusBox.innerText = "Gagal: " + err.message;
-            console.error(err);
+            document.getElementById('konten').innerHTML = html;
+        } catch (e) {
+            document.getElementById('konten').innerHTML = "Gagal mengambil data: " + e.message;
         }
     }
-
-    tesGeocoding();
+    ambilAlamat();
 </script>
+
 </body>
 </html>
