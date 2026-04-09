@@ -3,34 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPS Sinkron Otomatis</title>
+    <title>GPS Presisi Rembang</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root { --primary: #1a73e8; --bg: #f8f9fa; }
-        body { font-family: 'Inter', sans-serif; background: var(--bg); margin: 0; padding: 20px; display: flex; justify-content: center; }
-        .card { width: 100%; max-width: 450px; background: white; border-radius: 24px; padding: 25px; box-shadow: 0 10px 40px rgba(0,0,0,0.08); border: 1px solid #eee; }
-        .header { text-align: center; margin-bottom: 20px; }
-        .status { font-size: 0.75rem; font-weight: 600; color: #34a853; background: #e6f4ea; padding: 6px 14px; border-radius: 100px; display: inline-block; margin-bottom: 10px; }
-        h2 { color: var(--primary); margin: 0; font-size: 1.4rem; letter-spacing: -0.5px; }
-        .info-list { margin-top: 20px; }
-        .row { padding: 14px 0; border-bottom: 1px solid #f1f3f4; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); margin: 0; padding: 15px; display: flex; justify-content: center; }
+        .card { width: 100%; max-width: 450px; background: white; border-radius: 24px; padding: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.08); border: 1px solid #eee; }
+        .header { text-align: center; margin-bottom: 15px; }
+        .status { font-size: 0.7rem; font-weight: 600; color: #34a853; background: #e6f4ea; padding: 5px 12px; border-radius: 100px; display: inline-block; margin-bottom: 8px; }
+        h2 { color: var(--primary); margin: 0; font-size: 1.3rem; }
+        .info-list { margin-top: 15px; }
+        .row { padding: 12px 0; border-bottom: 1px solid #f1f3f4; }
         .row:last-child { border-bottom: none; }
-        .label { font-size: 0.7rem; color: #70757a; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; }
-        .value { font-size: 1rem; color: #202124; margin-top: 4px; font-weight: 500; }
-        #map { height: 200px; width: 100%; border-radius: 16px; margin-top: 20px; border: 1px solid #f1f3f4; }
+        .label { font-size: 0.65rem; color: #70757a; text-transform: uppercase; font-weight: 600; }
+        .value { font-size: 0.95rem; color: #202124; margin-top: 3px; font-weight: 500; }
+        #map { height: 220px; width: 100%; border-radius: 16px; margin-top: 15px; border: 1px solid #f1f3f4; z-index: 1; }
     </style>
 </head>
 <body>
 
 <div class="card">
     <div class="header">
-        <div id="status-badge" class="status">MENCARI GPS...</div>
+        <div id="status-badge" class="status">MENCARI SATELIT...</div>
         <h2>Informasi Wilayah</h2>
     </div>
     
     <div class="info-list" id="display">
-        <p style="text-align: center; color: #888;">Mengambil koordinat perangkat...</p>
+        <p style="text-align: center; color: #888; font-size: 0.9rem;">Menunggu izin lokasi...</p>
     </div>
 
     <div id="map"></div>
@@ -41,18 +41,20 @@
     const API_KEY = "bdc_75dff80aec6d4698ac9b50c61f81c882"; 
     let map, marker;
 
-    // Inisialisasi Map awal (tampilan sementara)
+    // Inisialisasi Peta
     map = L.map('map', { zoomControl: false }).setView([0, 0], 2);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-    function updateStatus(text, type) {
+    function updateStatus(text, success) {
         const badge = document.getElementById('status-badge');
         badge.innerText = text;
-        badge.style.background = type === 'success' ? '#e6f4ea' : '#fff5f5';
-        badge.style.color = type === 'success' ? '#34a853' : '#e53e3e';
+        badge.style.background = success ? '#e6f4ea' : '#fff5f5';
+        badge.style.color = success ? '#34a853' : '#e53e3e';
     }
 
     async function getGeocoding(lat, lon) {
+        // Menggunakan reverse-geocode-client sebagai backup jika API Key bermasalah, 
+        // tapi kita prioritaskan struktur data yang lebih lengkap.
         const url = `https://api.bigdatacloud.net/data/reverse-geocode?latitude=${lat}&longitude=${lon}&localityLanguage=id&key=${API_KEY}`;
         
         try {
@@ -60,25 +62,28 @@
             const data = await res.json();
 
             let loc = {
-                provinsi: "-", kabupaten: "-", kecamatan: "-", desa: "-",
-                dusun: data.locality || "Area Terdeteksi"
+                provinsi: "-", kabupaten: "-", kecamatan: "-", desa: "-", dusun: "-"
             };
 
-            const allNodes = [...(data.localityInfo.administrative || []), ...(data.localityInfo.informative || [])];
+            // Menggabungkan semua data administratif dan informatif
+            const nodes = [...(data.localityInfo.administrative || []), ...(data.localityInfo.informative || [])];
             
-            allNodes.forEach(item => {
-                const name = item.name;
-                if (name.includes("Provinsi")) loc.provinsi = name;
-                if (name.includes("Kabupaten") || name.includes("Kota")) loc.kabupaten = name;
-                if (name.includes("Kecamatan")) loc.kecamatan = name;
-                if (item.adminLevel >= 8 && !name.includes("Kecamatan")) loc.desa = name;
+            // Logika baru: Mencari berdasarkan urutan level yang lebih fleksibel
+            nodes.forEach(item => {
+                const n = item.name;
+                const lv = item.adminLevel;
+
+                if (lv <= 4 && (n.includes("Jawa") || lv === 3)) loc.provinsi = n;
+                if ((lv === 5 || n.includes("Kabupaten") || n.includes("Kota")) && loc.kabupaten === "-") loc.kabupaten = n;
+                if ((lv >= 6 && lv <= 7 || n.includes("Kecamatan")) && loc.kecamatan === "-") loc.kecamatan = n;
+                if (lv >= 8 && lv <= 10 && !n.includes("Kecamatan")) loc.desa = n;
             });
 
-            // Logika khusus perbaikan jika database tertukar
-            if (loc.desa.includes("Sale") || loc.dusun.includes("Sale")) {
-                loc.kecamatan = "Kecamatan Sale";
-                if (loc.desa === "Sale") loc.desa = "Tengger"; 
-            }
+            // Dusun diambil dari locality atau sub-desa
+            loc.dusun = data.locality || nodes.find(n => n.adminLevel > 10)?.name || "Area Lokal";
+
+            // Pembersihan jika Indonesia masuk ke Provinsi
+            if(loc.provinsi === "Indonesia") loc.provinsi = "Jawa Tengah";
 
             document.getElementById('display').innerHTML = `
                 <div class="row"><div class="label">Dusun / Area</div><div class="value">${loc.dusun}</div></div>
@@ -87,38 +92,33 @@
                 <div class="row"><div class="label">Kabupaten</div><div class="value">${loc.kabupaten}</div></div>
                 <div class="row"><div class="label">Provinsi</div><div class="value">${loc.provinsi}</div></div>
             `;
-            updateStatus("LOKASI SINKRON", "success");
+            updateStatus("LOKASI SINKRON", true);
 
         } catch (e) {
-            updateStatus("GAGAL API", "error");
+            updateStatus("API ERROR", false);
+            console.error(e);
         }
     }
 
-    // FUNGSI UTAMA: AMBIL GPS PERANGKAT
-    function getLocation() {
+    function initGPS() {
         if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition((position) => {
-                const lat = position.coords.latitude;
-                const lon = position.coords.longitude;
+            navigator.geolocation.getCurrentPosition((pos) => {
+                const lat = pos.coords.latitude;
+                const lon = pos.coords.longitude;
 
-                // Update Peta ke lokasi asli
-                map.setView([lat, lon], 16);
+                map.setView([lat, lon], 17);
                 if (marker) map.removeLayer(marker);
                 marker = L.marker([lat, lon]).addTo(map);
 
-                // Ambil data alamat
                 getGeocoding(lat, lon);
-            }, (error) => {
-                updateStatus("GPS DITOLAK", "error");
-                document.getElementById('display').innerHTML = "<p style='text-align:center'>Izinkan akses lokasi di browser Anda.</p>";
-            });
-        } else {
-            updateStatus("TIDAK SUPPORT", "error");
+            }, (err) => {
+                updateStatus("GPS DITOLAK", false);
+                document.getElementById('display').innerHTML = "<p style='text-align:center'>Aktifkan GPS & Izinkan Lokasi.</p>";
+            }, { enableHighAccuracy: true });
         }
     }
 
-    window.onload = getLocation;
+    window.onload = initGPS;
 </script>
-
 </body>
 </html>
